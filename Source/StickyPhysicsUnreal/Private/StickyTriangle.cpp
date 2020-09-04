@@ -60,7 +60,7 @@ FVector FStickyTriangle::ProjectLocationOntoTriangle(const FVector &Location)
 
 bool FStickyTriangle::ProjectRayOntoBoundaries(FVector &ResultLocation, const FRay &Ray)
 {
-	float Distance = INFINITY;
+	float ShortestDistSquared = INFINITY;
 	bool bFoundValidIntersection = false;
 
 	// Construct plane that lies on each edge of triangle and is perpendicular to triangle and intersect ray with it
@@ -73,12 +73,17 @@ bool FStickyTriangle::ProjectRayOntoBoundaries(FVector &ResultLocation, const FR
 		if (!FVector::Orthogonal(PlaneNormal, Ray.Direction, 0.00001f))
 		{
 			FPlane Plane(PlaneOrigin, PlaneNormal);
-			FMath::RayPlaneIntersection(Ray.Origin, Ray.Direction, Plane);
+			FVector IntersectionPoint = FMath::RayPlaneIntersection(Ray.Origin, Ray.Direction, Plane);
+			float DistSquared = FVector::DistSquared(IntersectionPoint, Ray.Origin);
+			if (DistSquared < ShortestDistSquared)
+			{
+				bFoundValidIntersection = true;
+				ShortestDistSquared = DistSquared;
+				ResultLocation = IntersectionPoint;
+			}
 		}
-
-
 	}
-	return false;
+	return bFoundValidIntersection;
 }
 
 void FStickyTriangle::DebugDraw(const UWorld* World, const FColor &Color)
