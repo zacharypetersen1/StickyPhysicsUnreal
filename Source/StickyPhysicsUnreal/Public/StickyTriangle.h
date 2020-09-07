@@ -22,4 +22,5 @@ public:
 	FVector ProjectLocationOntoTriangle(const FVector &Location);
 	bool ProjectRayOntoBoundaries(FVector &ResultLocation, const FRay &Ray);
 	void DebugDraw(const UWorld* World, const FColor &Color);
+	static bool TraceForTriangle(FStickyTriangle& Result, FVector& IntersectionPoint, const UWorld* World, const FVector& TraceStart, const FVector& TraceEnd, ECollisionChannel Channel);
 };

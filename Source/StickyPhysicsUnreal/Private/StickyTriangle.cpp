@@ -4,6 +4,9 @@
 #include "StickyTriangle.h"
 #include "DrawDebugHelpers.h"
 #include "Components/SceneComponent.h"
+#include "CollisionQueryParams.h"
+#include "Engine/StaticMesh.h"
+#include "Components/StaticMeshComponent.h"
 
 FStickyTriangle::FStickyTriangle()
 {
@@ -19,19 +22,25 @@ FStickyTriangle::FStickyTriangle(FVector VertexPositionA, FVector VertexPosition
 
 FVector FStickyTriangle::GetVertexWorldPosition(int Index)
 {
-	if (IsValid(OwningComponent))
-	{
-		return OwningComponent->GetComponentTransform().TransformPosition(ObjectVertexPositions[Index]);
-	}
+	if (!IsValid(OwningComponent))
+		return FVector::ZeroVector;
+
+	return OwningComponent->GetComponentTransform().TransformPosition(ObjectVertexPositions[Index]);
 }
 
 FVector FStickyTriangle::GetVertexWorldNormal(int Index)
 {
+	if (!IsValid(OwningComponent))
+		return FVector::ZeroVector;
+
 	return OwningComponent->GetComponentTransform().TransformVectorNoScale(ObjectVertexNormals[Index]);
 }
 
 FVector FStickyTriangle::GetWorldFaceNormal()
 {
+	if (!IsValid(OwningComponent))
+		return FVector::ZeroVector;
+
 	return OwningComponent->GetComponentTransform().TransformVectorNoScale(ObjectFaceNormal);
 }
 
@@ -58,7 +67,7 @@ FVector FStickyTriangle::ProjectLocationOntoTriangle(const FVector &Location)
 	return FVector::VectorPlaneProject(Location - ObjectVertexPositions[0], ObjectFaceNormal) + ObjectVertexPositions[0];
 }
 
-bool FStickyTriangle::ProjectRayOntoBoundaries(FVector &ResultLocation, const FRay &Ray)
+bool FStickyTriangle::ProjectRayOntoBoundaries(FVector &ResultIntersectionPoint, const FRay &Ray)
 {
 	float ShortestDistSquared = INFINITY;
 	bool bFoundValidIntersection = false;
@@ -79,7 +88,7 @@ bool FStickyTriangle::ProjectRayOntoBoundaries(FVector &ResultLocation, const FR
 			{
 				bFoundValidIntersection = true;
 				ShortestDistSquared = DistSquared;
-				ResultLocation = IntersectionPoint;
+				ResultIntersectionPoint = IntersectionPoint;
 			}
 		}
 	}
@@ -96,4 +105,48 @@ void FStickyTriangle::DebugDraw(const UWorld* World, const FColor &Color)
 			GetVertexWorldPosition((i + 1) % 3),
 			Color, false, -1.0f, 0, 5.0f);
 	}
+}
+
+bool FStickyTriangle::TraceForTriangle(FStickyTriangle& Result, FVector& IntersectionPoint, const UWorld* World, const FVector& TraceStart, const FVector& TraceEnd, ECollisionChannel Channel)
+{
+	if (!World) return false;
+
+	static FCollisionQueryParams Params;
+	Params.bReturnFaceIndex = true;
+	Params.bTraceComplex = true;
+
+	FHitResult HitResult;
+	if (World->LineTraceSingleByChannel(HitResult, TraceStart, TraceEnd, Channel, Params))
+	{
+		const UStaticMeshComponent* StaticMeshComponent = Cast<UStaticMeshComponent>(HitResult.Component);
+		if (StaticMeshComponent)
+		{
+			const UStaticMesh* StaticMesh = StaticMeshComponent->GetStaticMesh();
+
+			if (!StaticMesh)
+				return false;
+			if (!StaticMesh->RenderData)
+				return false;
+			if (StaticMesh->RenderData->LODResources.Num() == 0)
+				return false;
+
+			FStaticMeshLODResources* Resources =
+				&(StaticMesh->RenderData->LODResources[StaticMesh->LODForCollision]);
+
+			const int Index1 = Resources->IndexBuffer.GetIndex(HitResult.FaceIndex * 3);
+			const int Index2 = Resources->IndexBuffer.GetIndex(HitResult.FaceIndex * 3 + 1);
+			const int Index3 = Resources->IndexBuffer.GetIndex(HitResult.FaceIndex * 3 + 2);
+
+			const FStaticMeshVertexBuffers* VertexBuffers = &(Resources->VertexBuffers);
+
+			const FVector VertexPosition1 = VertexBuffers->PositionVertexBuffer.VertexPosition(Index1);
+			const FVector VertexPosition2 = VertexBuffers->PositionVertexBuffer.VertexPosition(Index2);
+			const FVector VertexPosition3 = VertexBuffers->PositionVertexBuffer.VertexPosition(Index3);
+
+			Result = FStickyTriangle(VertexPosition1, VertexPosition2, VertexPosition3, StaticMeshComponent);
+			IntersectionPoint = HitResult.ImpactPoint;
+			return true;
+		}
+	}
+	return false;
 }
