@@ -35,7 +35,11 @@ void UStickyPhysicsComponent::TickComponent(float DeltaTime, ELevelTick TickType
 		GetOwner()->GetActorLocation() + FVector(0, 0, -50000),
 		ECollisionChannel::ECC_GameTraceChannel1))
 	{
-		DrawDebugPoint(GetWorld(), IntersectionPoint, 50, FColor::Blue);
+		DrawDebugPoint(GetWorld(), IntersectionPoint, 25, FColor::Blue);
 		Triangle.DebugDraw(GetWorld(), FColor::Green);
+		FVector BoundaryIntersectionPoint;
+		Triangle.ProjectRayOntoBoundaries(BoundaryIntersectionPoint, FRay(IntersectionPoint, Triangle.ProjectDirectionOntoTriangle(GetOwner()->GetActorForwardVector())));
+		DrawDebugPoint(GetWorld(), BoundaryIntersectionPoint, 25, FColor::Red);
+		UE_LOG(LogTemp, Warning, TEXT("Intersection:%s"), *BoundaryIntersectionPoint.ToString());
 	}
 }

@@ -1,6 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 
+#include "Engine.h"
 #include "StickyTriangle.h"
 #include "DrawDebugHelpers.h"
 #include "Components/SceneComponent.h"
@@ -17,6 +18,7 @@ FStickyTriangle::FStickyTriangle(FVector VertexPositionA, FVector VertexPosition
 	ObjectVertexPositions.Add(VertexPositionA);
 	ObjectVertexPositions.Add(VertexPositionB);
 	ObjectVertexPositions.Add(VertexPositionC);
+	ObjectFaceNormal = (VertexPositionA ^ VertexPositionB).GetSafeNormal();
 	OwningComponent = SetOwningComponent;
 }
 
@@ -38,9 +40,11 @@ FVector FStickyTriangle::GetVertexWorldNormal(int Index)
 
 FVector FStickyTriangle::GetWorldFaceNormal()
 {
+	UE_LOG(LogTemp, Warning, TEXT("Attempting Normal Check...."));
 	if (!IsValid(OwningComponent))
 		return FVector::ZeroVector;
 
+	UE_LOG(LogTemp, Warning, TEXT("FaceNormal:%s"), *ObjectFaceNormal.ToString());
 	return OwningComponent->GetComponentTransform().TransformVectorNoScale(ObjectFaceNormal);
 }
 
@@ -75,16 +79,16 @@ bool FStickyTriangle::ProjectRayOntoBoundaries(FVector &ResultIntersectionPoint,
 	// Construct plane that lies on each edge of triangle and is perpendicular to triangle and intersect ray with it
 	for (int i = 0; i < 3; i++)
 	{
-		FVector PlaneOrigin = GetVertexWorldPosition(i);
-		FVector PlaneNormal = ((GetVertexWorldPosition((i + 1) % 3) - PlaneOrigin) ^ GetWorldFaceNormal()).GetSafeNormal();
-
+		FVector VertPositionI = GetVertexWorldPosition(i);
+		FPlane Plane = FPlane(VertPositionI, GetVertexWorldPosition((i + 1) % 3), VertPositionI + GetWorldFaceNormal());
+		
 		// Check if Ray is orthogonal to line
-		if (!FVector::Orthogonal(PlaneNormal, Ray.Direction, 0.00001f))
+		if (!FVector::Orthogonal(Plane, Ray.Direction))
 		{
-			FPlane Plane(PlaneOrigin, PlaneNormal);
 			FVector IntersectionPoint = FMath::RayPlaneIntersection(Ray.Origin, Ray.Direction, Plane);
+			DrawDebugPoint(GEngine->GetWorldContexts()[0].World(), IntersectionPoint, 25, FColor::Orange);
 			float DistSquared = FVector::DistSquared(IntersectionPoint, Ray.Origin);
-			if (DistSquared < ShortestDistSquared)
+			if (DistSquared < ShortestDistSquared && (Ray.Direction | (IntersectionPoint - Ray.Origin)) > 0)
 			{
 				bFoundValidIntersection = true;
 				ShortestDistSquared = DistSquared;
